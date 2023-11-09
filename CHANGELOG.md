@@ -1,7 +1,22 @@
-## 4.9.64 (TBD)
+## 4.9.67 (October 1, 2023)
 
-- Use passive event listeners (#11047)
-- Fix System Automation on Firefox (#10237)
+- Fixed Site List when there is any URL with port.
+
+## 4.9.66 (September 25, 2023)
+
+- Dynamic mode fixes.
+- UI improvements.
+
+## 4.9.65 (August 7, 2023)
+
+- Optimize inline style handling (fixes DuckDuckGo issue).
+- Added an option to enable/disable the extension for all websites by default.
+
+## 4.9.64 (June 21, 2023)
+
+- Using passive event listeners (#11047)
+- Fixed System Automation on Firefox (#10237)
+- Fixed News section.
 
 ## 4.9.63 (Apr 10, 2023)
 

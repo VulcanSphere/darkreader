@@ -1,13 +1,14 @@
 import {Extension} from './extension';
 import {getHelpURL, UNINSTALL_URL} from '../utils/links';
 import {canInjectScript} from '../background/utils/extension-api';
-import type {ColorScheme, DebugMessageBGtoCS, DebugMessageBGtoUI, DebugMessageCStoBG, ExtensionData, UserSettings} from '../definitions';
+import type {ColorScheme, DebugMessageBGtoCS, DebugMessageBGtoUI, DebugMessageCStoBG, ExtensionData, News, UserSettings} from '../definitions';
 import {DebugMessageTypeBGtoCS, DebugMessageTypeBGtoUI, DebugMessageTypeCStoBG} from '../utils/message';
 import {makeChromiumHappy} from './make-chromium-happy';
 import {ASSERT, logInfo} from './utils/log';
 import {sendLog} from './utils/sendLog';
 import {isFirefox} from '../utils/platform';
 import {emulateColorScheme, isSystemDarkModeEnabled} from '../utils/media-query';
+import {setNewsForTesting} from './newsmaker';
 
 type TestMessage = {
     type: 'getManifest';
@@ -43,6 +44,10 @@ type TestMessage = {
 } | {
     type: 'firefox-emulateColorScheme';
     data: ColorScheme;
+    id: number;
+} | {
+    type: 'setNews';
+    data: News[];
     id: number;
 };
 
@@ -110,7 +115,7 @@ if (__WATCH__) {
             }
             switch (message.type) {
                 case 'reload:css':
-                    chrome.runtime.sendMessage<DebugMessageBGtoCS>({type: DebugMessageTypeBGtoCS.CSS_UPDATE});
+                    chrome.runtime.sendMessage<DebugMessageBGtoUI>({type: DebugMessageTypeBGtoUI.CSS_UPDATE});
                     break;
                 case 'reload:ui':
                     chrome.runtime.sendMessage<DebugMessageBGtoUI>({type: DebugMessageTypeBGtoUI.UPDATE});
@@ -122,6 +127,10 @@ if (__WATCH__) {
                         chrome.runtime.sendMessage<DebugMessageBGtoCS>(message);
                         for (const tab of tabs) {
                             if (canInjectScript(tab.url)) {
+                                if (__CHROMIUM_MV3__) {
+                                    chrome.tabs.sendMessage<DebugMessageBGtoCS>(tab.id!, message).catch(() => { /* noop */ });
+                                    continue;
+                                }
                                 chrome.tabs.sendMessage<DebugMessageBGtoCS>(tab.id!, message);
                             }
                         }
@@ -202,6 +211,10 @@ if (__TEST__) {
                     chrome.storage[region].get(keys, respond);
                     break;
                 }
+                case 'setNews':
+                    setNewsForTesting(message.data);
+                    respond();
+                    break;
                 // TODO(anton): remove this once Firefox supports tab.eval() via WebDriver BiDi
                 case 'firefox-createTab':
                     ASSERT('Firefox-specific function', isFirefox);
@@ -223,6 +236,27 @@ if (__TEST__) {
             socket.send(JSON.stringify({error: String(err), original: e.data}));
         }
     };
+
+    chrome.downloads.onCreated.addListener(({id, mime, url, danger, paused}) => {
+        // Cancel download
+        chrome.downloads.cancel(id);
+
+        try {
+            const {protocol, origin} = new URL(url);
+            const realOrigin = (new URL(chrome.runtime.getURL(''))).origin;
+            const ok = paused === false && danger === 'safe' && protocol === 'blob:' && origin === realOrigin;
+            socket.send(JSON.stringify({
+                data: {
+                    type: 'download',
+                    ok,
+                    mime,
+                },
+                id: null,
+            }));
+        } catch (e) {
+            // Do nothing
+        }
+    });
 }
 
 if (__DEBUG__ && __LOG__) {
